@@ -1,25 +1,46 @@
 package main
 
 import (
-	"usetemp/handler"
-	pb "usetemp/proto"
-
-	"github.com/micro/micro/v3/service"
-	"github.com/micro/micro/v3/service/logger"
+	"fmt"
+	"github.com/asim/go-micro/v3"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/mysql"
+	"user/domain/repository"
+	service2 "user/domain/service"
+	"user/handler"
+	user "user/proto/user"
 )
 
 func main() {
-	// Create service
-	srv := service.New(
-		service.Name("usetemp"),
-		service.Version("latest"),
-	)
+	//服务参数设置
+	srv := micro.NewService(
+		micro.Name("go.micro.service.user"),
+		micro.Version("latest"),
+		)
+	//初始化服务
+	srv.Init()
+	//创建数据库链接 数据库中间件
+	db,err := gorm.Open("mysql","root:lxdlxd@/micro?charset=utf8&parseTime=True&loc=Local")
+	if err!=nil{
+		fmt.Println(err)
+	}
+	defer db.Close()
 
-	// Register handler
-	pb.RegisterUsetempHandler(srv.Server(), new(handler.Usetemp))
+	db.SingularTable(true)
+	//只执行一次 数据表初始化
+	rp := repository.NewUserRepository(db)
+	rp.InitTable()
 
-	// Run service
-	if err := srv.Run(); err != nil {
-		logger.Fatal(err)
+	//创建服务实例
+	userDataService := service2.NewUserDataService(repository.NewUserRepository(db))
+	//注册Handler
+	err = user.RegisterUserHandler(srv.Server(),&handler.User{UserDateService:userDataService})
+	if err!=nil{
+		fmt.Println(err)
+	}
+
+	//Run service
+	if err := srv.Run();err!=nil{
+		fmt.Println(err)
 	}
 }
